@@ -101,7 +101,6 @@ st.caption("📊 Business Intelligence · HotelIQ Platform")
 
 # ──────────────────────────────────────────────────────────────────────────────
 # 7. KPI ROW
-# ──────────────────────────────────────────────────────────────────────────────
 st.subheader("KEY PERFORMANCE INDICATORS")
 
 df_ok = df[df["is_canceled"] == 0]
