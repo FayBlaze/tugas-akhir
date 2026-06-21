@@ -1,293 +1,490 @@
-import streamlit as st
-import pandas as pd
-import plotly.express as px
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score
+import streamlit as st          
+import pandas as pd             
+import plotly.express as px     
+import plotly.graph_objects as go
 
-# ==========================================
-# PAGE CONFIGURATION
-# ==========================================
 st.set_page_config(
-    page_title="Hotel Booking BI Dashboard",
-    page_icon="🏨",
+    page_title="Video Game Sales — BI Dashboard",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Tema dan Judul
-st.title("🏨 Hotel Booking Business Intelligence Dashboard")
-st.markdown("Dashboard interaktif untuk menganalisis demand, revenue, dan cancellation pada pemesanan hotel.")
-st.markdown("---")
-
-# ==========================================
-# DATA PREPROCESSING
-# ==========================================
 @st.cache_data
-def load_data():
-    # Membaca data
+def load_data() -> pd.DataFrame:
+    """
+    Membaca dan membersihkan dataset vgsales.csv.
+    """
     try:
-        df = pd.read_csv('hotel_bookings.csv')
+        df = pd.read_csv("vgsales.csv")
     except FileNotFoundError:
-        st.error("File 'hotel_bookings.csv' tidak ditemukan. Pastikan file berada di direktori yang sama dengan app.py.")
-        st.stop()
-        
-    # Membersihkan data yang kosong (Null handling)
-    df.fillna({'children': 0, 'country': 'Unknown', 'agent': 0, 'company': 0}, inplace=True)
-    
-    # Mapping nama bulan ke angka untuk membuat datetime
-    month_map = {
-        'January': 1, 'February': 2, 'March': 3, 'April': 4, 
-        'May': 5, 'June': 6, 'July': 7, 'August': 8, 
-        'September': 9, 'October': 10, 'November': 11, 'December': 12
-    }
-    df['arrival_month_num'] = df['arrival_date_month'].map(month_map)
-    
-    # Membuat kolom arrival_date
-    df['arrival_date'] = pd.to_datetime(
-        df['arrival_date_year'].astype(str) + '-' + 
-        df['arrival_month_num'].astype(str) + '-' + 
-        df['arrival_date_day_of_month'].astype(str), 
-        errors='coerce'
-    )
-    
-    # Membuat kolom Revenue
-    df['Revenue'] = df['adr'] * (df['stays_in_week_nights'] + df['stays_in_weekend_nights'])
-    
-    # Menghapus revenue negatif atau tidak masuk akal jika ada
-    df = df[df['Revenue'] >= 0]
-    
+        st.error("File vgsales.csv tidak ditemukan. Pastikan file berada di folder yang sama.")
+        return pd.DataFrame()
+
+    # — Pembersihan data —
+    df = df.dropna(subset=["Year"])            # hapus baris tanpa tahun
+    df["Year"]      = df["Year"].astype(int)   # float → int
+    df["Publisher"] = df["Publisher"].fillna("Unknown")  # isi NaN publisher
+
     return df
 
-df = load_data()
+#  LOAD DATA
+df = load_data()   # df = DataFrame lengkap, belum difilter
 
-# ==========================================
-# SIDEBAR FILTERS
-# ==========================================
-st.sidebar.header("🎯 Filter Data")
-
-# Filter Hotel
-hotel_list = df['hotel'].unique()
-selected_hotels = st.sidebar.multiselect("Pilih Hotel", hotel_list, default=hotel_list)
-
-# Filter Tahun
-year_list = sorted(df['arrival_date_year'].unique())
-selected_years = st.sidebar.multiselect("Pilih Tahun", year_list, default=year_list)
-
-# Filter Market Segment
-segment_list = df['market_segment'].unique()
-selected_segments = st.sidebar.multiselect("Pilih Market Segment", segment_list, default=segment_list)
-
-# Terapkan filter ke dataframe
-filtered_df = df[
-    (df['hotel'].isin(selected_hotels)) &
-    (df['arrival_date_year'].isin(selected_years)) &
-    (df['market_segment'].isin(selected_segments))
-]
-
-if filtered_df.empty:
-    st.warning("⚠️ Data tidak ditemukan berdasarkan filter yang dipilih.")
+if df.empty:
     st.stop()
 
-# ==========================================
-# SECTION 1 - EXECUTIVE SUMMARY
-# ==========================================
-st.subheader("📊 Executive Summary")
+#  JUDUL DASHBOARD
+st.title("🎮 Video Game Sales — Business Intelligence Dashboard")
+st.caption(
+    "Analisis penjualan video game global · Data: VGChartz via Kaggle · "
+    f"{len(df):,} judul · {df['Year'].min()}–{df['Year'].max()}"
+)
 
-total_booking = len(filtered_df)
-total_revenue = filtered_df['Revenue'].sum()
-average_adr = filtered_df['adr'].mean()
-cancellation_rate = (filtered_df['is_canceled'].sum() / total_booking) * 100 if total_booking > 0 else 0
+#  SIDEBAR — FILTER INTERAKTIF
+with st.sidebar:
+    st.header("⚙️ Filter Data")
 
-col1, col2, col3, col4 = st.columns(4)
-with col1:
-    st.metric(label="Total Booking", value=f"{total_booking:,.0f}")
-with col2:
-    st.metric(label="Total Revenue", value=f"${total_revenue:,.2f}")
-with col3:
-    st.metric(label="Average ADR", value=f"${average_adr:,.2f}")
-with col4:
-    st.metric(label="Cancellation Rate", value=f"{cancellation_rate:.2f}%")
+    #Filter tahun
+    min_year = int(df["Year"].min())   # 1980
+    max_year = int(df["Year"].max())   # 2020
 
-st.markdown("---")
+    tahun_range = st.slider(
+        "Pilih Rentang Tahun",
+        min_value=min_year,
+        max_value=max_year,
+        value=(min_year, max_year),    # default: semua tahun
+        step=1
+    )
 
-# Menggunakan Tabs untuk struktur Dashboard
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "👥 Customer Analysis", 
-    "💰 Revenue Analysis", 
-    "🚫 Cancellation Analysis", 
-    "💡 Business Insights & Recs", 
-    "🤖 Predictive Analytics"
+    #Filter genre
+    genre_unik = sorted(df["Genre"].unique())   # list genre unik, urut abjad
+    pilihan_genre = st.multiselect(
+        "Pilih Genre:",
+        options=genre_unik,
+        default=genre_unik             # default: semua genre terpilih
+    )
+
+    #Filter platform
+    top_platforms = (
+        df.groupby("Platform")["Global_Sales"]
+          .sum()
+          .sort_values(ascending=False)
+          .head(15)
+          .index.tolist()
+    )
+    
+    # Urutkan nama platform secara alfabetis
+    top_platforms_abjad = sorted(top_platforms)
+    
+    pilihan_platform = st.multiselect(
+        "Pilih Platform (Top 15):",
+        options=top_platforms_abjad,
+        default=top_platforms_abjad
+    )
+
+    st.divider()
+    st.caption("ℹ️ Filter berlaku pada semua grafik di bawah.")
+
+
+#  FUNGSI: apply_filters()
+def apply_filters(data: pd.DataFrame, year_range: tuple, genres: list, platforms: list) -> pd.DataFrame:
+    mask = (
+        (data["Year"]     >= year_range[0]) &
+        (data["Year"]     <= year_range[1]) &
+        (data["Genre"].isin(genres))        &
+        (data["Platform"].isin(platforms))
+    )
+    return data[mask]
+
+# df_filtered = subset data sesuai semua filter yang aktif
+df_filtered = apply_filters(df, tahun_range, pilihan_genre, pilihan_platform)
+
+#  BARIS KPI — INDIKATOR UTAMA
+total_sales   = df_filtered["Global_Sales"].sum()   # total penjualan (juta unit)
+total_games   = df_filtered.shape[0]                # jumlah judul game
+avg_sales     = df_filtered["Global_Sales"].mean()  # rata-rata penjualan per judul
+
+if not df_filtered.empty:
+    top_publisher = df_filtered.groupby("Publisher")["Global_Sales"].sum().idxmax()
+else:
+    top_publisher = "-"
+
+cols = st.columns(4)
+cols[0].metric("🌍 Total Penjualan Global",  f"{total_sales:,.2f}M unit")
+cols[1].metric("🎮 Jumlah Judul Game",        f"{total_games:,}")
+cols[2].metric("📊 Rata-rata per Judul",      f"{avg_sales:.3f}M unit")
+cols[3].metric("🏆 Publisher Teratas",        top_publisher)
+
+st.divider()
+
+#  FUNGSI: make_bar()
+def make_bar(data: pd.DataFrame, x: str, y: str, title: str, color: str = None, horizontal: bool = False, top_n: int = None) -> go.Figure:
+    if top_n:
+        data = data.nlargest(top_n, y)
+    orientation = "h" if horizontal else "v"
+    if horizontal:
+        x, y = y, x   # swap agar bar horizontal
+    fig = px.bar(
+        data, x=x, y=y,
+        title=title,
+        color=color if color else y,
+        color_continuous_scale="Blues",
+        orientation=orientation,
+        text_auto=".1f"
+    )
+    fig.update_layout(showlegend=False, margin=dict(t=40, b=10))
+    return fig
+
+
+# ═══════════════════════════════════════════════════════════════
+#  PEMBUATAN TABS
+# ═══════════════════════════════════════════════════════════════
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+    "📈 Tren", 
+    "🕹️ Genre", 
+    "🖥️ Platform", 
+    "🏢 Publisher", 
+    "🌏 Regional", 
+    "🏆 Top 20", 
+    "💡 Insight", 
+    "📖 Docs"
 ])
 
-# ==========================================
-# SECTION 2 - CUSTOMER ANALYSIS
-# ==========================================
+# ───────────────────────────────────────────────────────────────
+# TAB 1 — TREN PENJUALAN PER TAHUN
+# ───────────────────────────────────────────────────────────────
 with tab1:
-    st.subheader("👥 Customer Analysis")
-    
-    col_c1, col_c2 = st.columns(2)
-    
-    with col_c1:
-        # Top 10 Country
-        top_countries = filtered_df['country'].value_counts().head(10).reset_index()
-        top_countries.columns = ['Country', 'Total Booking']
-        fig_country = px.bar(top_countries, x='Country', y='Total Booking', title="Top 10 Countries by Booking", color='Total Booking', color_continuous_scale='Blues')
-        st.plotly_chart(fig_country, use_container_width=True)
-        
-    with col_c2:
-        # Customer Type Distribution
-        if 'customer_type' in filtered_df.columns:
-            cust_type = filtered_df['customer_type'].value_counts().reset_index()
-            cust_type.columns = ['Customer Type', 'Count']
-            fig_cust = px.pie(cust_type, names='Customer Type', values='Count', title="Customer Type Distribution", hole=0.4)
-            st.plotly_chart(fig_cust, use_container_width=True)
-        else:
-            st.info("Kolom 'customer_type' tidak tersedia di dataset.")
+    st.subheader("Tren Penjualan per Tahun")
+    st.markdown(
+        """
+        **Apa yang dianalisis:**
+        Total penjualan global (juta unit) dijumlahkan per tahun untuk
+        mengidentifikasi fase pertumbuhan, puncak, dan penurunan industri.
 
-    # Repeat Guest Analysis
-    if 'is_repeated_guest' in filtered_df.columns:
-        repeat_guest = filtered_df['is_repeated_guest'].replace({0: 'New Guest', 1: 'Repeated Guest'}).value_counts().reset_index()
-        repeat_guest.columns = ['Guest Type', 'Count']
-        fig_repeat = px.pie(repeat_guest, names='Guest Type', values='Count', title="Repeat Guest Analysis", hole=0.4, color_discrete_sequence=['#ff9999','#66b3ff'])
-        st.plotly_chart(fig_repeat, use_container_width=True)
+        **Temuan utama:**
+        Industri mencapai puncaknya pada **2006–2009** (era Wii, DS, PS3, X360).
+        Tren menurun setelah 2009 mencerminkan fragmentasi pasar ke mobile/digital
+        yang tidak tercakup dataset ini (VGChartz hanya rekam penjualan fisik).
+        """
+    )
+    if not df_filtered.empty:
+        year_sales = (
+            df_filtered.groupby("Year")["Global_Sales"]
+                       .sum()
+                       .reset_index()
+                       .rename(columns={"Global_Sales": "Total_Sales"})
+        )
+        fig_trend = px.area(
+            year_sales, x="Year", y="Total_Sales",
+            title="Total Penjualan Global per Tahun (juta unit)",
+            markers=True,
+            color_discrete_sequence=["#1f77b4"]
+        )
+        fig_trend.update_layout(xaxis_title="Tahun", yaxis_title="Penjualan (juta unit)", margin=dict(t=40, b=10))
+        st.plotly_chart(fig_trend, width="stretch")
 
-# ==========================================
-# SECTION 3 - REVENUE ANALYSIS
-# ==========================================
+# ───────────────────────────────────────────────────────────────
+# TAB 2 — ANALISIS GENRE
+# ───────────────────────────────────────────────────────────────
 with tab2:
-    st.subheader("💰 Revenue Analysis")
-    
-    col_r1, col_r2 = st.columns(2)
-    
-    with col_r1:
-        # Revenue by Hotel
-        rev_hotel = filtered_df.groupby('hotel')['Revenue'].sum().reset_index()
-        fig_rev_hotel = px.bar(rev_hotel, x='hotel', y='Revenue', title="Revenue by Hotel", color='hotel')
-        st.plotly_chart(fig_rev_hotel, use_container_width=True)
-        
-    with col_r2:
-        # Revenue by Market Segment
-        rev_segment = filtered_df.groupby('market_segment')['Revenue'].sum().reset_index().sort_values(by='Revenue', ascending=False)
-        fig_rev_segment = px.bar(rev_segment, x='market_segment', y='Revenue', title="Revenue by Market Segment", color='market_segment')
-        st.plotly_chart(fig_rev_segment, use_container_width=True)
-        
-    # Revenue Trend per Month
-    rev_trend = filtered_df.groupby(['arrival_date_year', 'arrival_date_month', 'arrival_month_num'])['Revenue'].sum().reset_index()
-    rev_trend = rev_trend.sort_values(by=['arrival_date_year', 'arrival_month_num'])
-    rev_trend['Year-Month'] = rev_trend['arrival_date_year'].astype(str) + " - " + rev_trend['arrival_date_month']
-    
-    fig_rev_trend = px.line(rev_trend, x='Year-Month', y='Revenue', title="Revenue Trend per Month", markers=True)
-    st.plotly_chart(fig_rev_trend, use_container_width=True)
+    st.subheader("Analisis Genre")
+    st.markdown(
+        """
+        **Apa yang dianalisis:**
+        Total penjualan per genre dan jumlah judul per genre.
+        Dua dimensi ini penting: genre bisa populer karena banyak judul
+        (volume) *atau* karena tiap judulnya terjual banyak (kualitas).
+        """
+    )
+    if not df_filtered.empty:
+        genre_sales = (
+            df_filtered.groupby("Genre")
+                       .agg(Total_Sales=("Global_Sales", "sum"),
+                            Total_Games=("Name", "count"),
+                            Avg_Sales=("Global_Sales", "mean"))
+                       .reset_index()
+                       .sort_values("Total_Sales", ascending=False)
+        )
+        col1, col2 = st.columns(2)
+        with col1:
+            fig_genre_sales = make_bar(genre_sales, x="Genre", y="Total_Sales", title="Total Penjualan per Genre (juta unit)")
+            st.plotly_chart(fig_genre_sales, width="stretch")
+        with col2:
+            fig_genre_count = make_bar(genre_sales.sort_values("Total_Games", ascending=False), x="Genre", y="Total_Games", title="Jumlah Judul Game per Genre")
+            st.plotly_chart(fig_genre_count, width="stretch")
 
-# ==========================================
-# SECTION 4 - CANCELLATION ANALYSIS
-# ==========================================
+        st.caption("**Rata-rata Penjualan per Judul berdasarkan Genre** (mengindikasikan efisiensi/dampak per game)")
+        avg_genre = genre_sales.sort_values("Avg_Sales", ascending=True)
+        fig_avg = px.bar(
+            avg_genre, x="Avg_Sales", y="Genre", orientation="h",
+            title="Rata-rata Penjualan per Judul (juta unit)",
+            color="Avg_Sales", color_continuous_scale="Greens", text_auto=".2f"
+        )
+        fig_avg.update_layout(showlegend=False, margin=dict(t=40, b=10))
+        st.plotly_chart(fig_avg, width="stretch")
+
+# ───────────────────────────────────────────────────────────────
+# TAB 3 — ANALISIS PLATFORM
+# ───────────────────────────────────────────────────────────────
 with tab3:
-    st.subheader("🚫 Cancellation Analysis")
-    
-    col_ca1, col_ca2 = st.columns(2)
-    
-    with col_ca1:
-        # Cancellation Rate per Hotel
-        cancel_hotel = filtered_df.groupby('hotel')['is_canceled'].mean().reset_index()
-        cancel_hotel['is_canceled'] = cancel_hotel['is_canceled'] * 100 # ubah ke persen
-        fig_cancel_hotel = px.bar(cancel_hotel, x='hotel', y='is_canceled', title="Cancellation Rate per Hotel (%)", color='hotel', text_auto='.2f')
-        fig_cancel_hotel.update_traces(textposition="outside")
-        st.plotly_chart(fig_cancel_hotel, use_container_width=True)
-        
-    with col_ca2:
-        # Market Segment vs Cancellation
-        cancel_segment = filtered_df.groupby(['market_segment', 'is_canceled']).size().reset_index(name='count')
-        cancel_segment['is_canceled'] = cancel_segment['is_canceled'].replace({0: 'Not Canceled', 1: 'Canceled'})
-        fig_cancel_segment = px.bar(cancel_segment, x='market_segment', y='count', color='is_canceled', title="Market Segment vs Cancellation", barmode='group')
-        st.plotly_chart(fig_cancel_segment, use_container_width=True)
-        
-    # Lead Time vs Cancellation
-    fig_lead_time = px.histogram(filtered_df, x="lead_time", color="is_canceled", title="Lead Time Distribution vs Cancellation", nbins=50, barmode="overlay")
-    st.plotly_chart(fig_lead_time, use_container_width=True)
+    st.subheader("Analisis Platform")
+    st.markdown(
+        """
+        **Apa yang dianalisis:**
+        Platform (konsol) mana yang menghasilkan penjualan terbesar
+        dan berapa banyak judul yang tersedia di masing-masing platform.
+        """
+    )
+    if not df_filtered.empty:
+        platform_sales = (
+            df_filtered.groupby("Platform")
+                       .agg(Total_Sales=("Global_Sales", "sum"),
+                            Total_Games=("Name", "count"))
+                       .reset_index()
+                       .sort_values("Total_Sales", ascending=False)
+                       .head(15)
+        )
+        col3, col4 = st.columns(2)
+        with col3:
+            fig_plat_sales = px.bar(
+                platform_sales, x="Platform", y="Total_Sales",
+                title="Top 15 Platform — Total Penjualan",
+                color="Total_Sales", color_continuous_scale="Oranges", text_auto=".0f"
+            )
+            fig_plat_sales.update_layout(showlegend=False, margin=dict(t=40, b=10))
+            st.plotly_chart(fig_plat_sales, width="stretch")
+        with col4:
+            fig_plat_games = px.bar(
+                platform_sales.sort_values("Total_Games", ascending=False),
+                x="Platform", y="Total_Games",
+                title="Top 15 Platform — Jumlah Judul",
+                color="Total_Games", color_continuous_scale="Purples", text_auto=".0f"
+            )
+            fig_plat_games.update_layout(showlegend=False, margin=dict(t=40, b=10))
+            st.plotly_chart(fig_plat_games, width="stretch")
 
-# ==========================================
-# SECTION 5 & 6 - BUSINESS INSIGHTS & RECS
-# ==========================================
+# ───────────────────────────────────────────────────────────────
+# TAB 4 — ANALISIS PUBLISHER
+# ───────────────────────────────────────────────────────────────
 with tab4:
-    col_ins1, col_ins2 = st.columns(2)
-    
-    with col_ins1:
-        st.subheader("💡 Automated Business Insights")
-        
-        # Cari Hotel dengan cancel tertinggi
-        if total_booking > 0:
-            highest_cancel_hotel = filtered_df.groupby('hotel')['is_canceled'].mean().idxmax()
-            highest_cancel_rate = filtered_df.groupby('hotel')['is_canceled'].mean().max() * 100
-            st.warning(f"**Hotel dengan Cancellation Tertinggi:** {highest_cancel_hotel} ({highest_cancel_rate:.2f}%)")
-            
-            # Segment dengan revenue terbesar
-            top_revenue_segment = filtered_df.groupby('market_segment')['Revenue'].sum().idxmax()
-            top_revenue_value = filtered_df.groupby('market_segment')['Revenue'].sum().max()
-            st.success(f"**Segment Revenue Terbesar:** {top_revenue_segment} (${top_revenue_value:,.2f})")
-            
-            # Negara dengan booking terbanyak
-            top_country = filtered_df['country'].value_counts().idxmax()
-            top_country_bookings = filtered_df['country'].value_counts().max()
-            st.info(f"**Negara Booking Terbanyak:** {top_country} ({top_country_bookings:,} bookings)")
-        else:
-            st.write("Belum ada data untuk dianalisis.")
+    st.subheader("Analisis Publisher")
+    st.markdown(
+        """
+        **Apa yang dianalisis:**
+        Top 10 publisher berdasarkan total penjualan global dan
+        rata-rata penjualan per judul (mengukur efisiensi portofolio).
+        """
+    )
+    if not df_filtered.empty:
+        pub_sales = (
+            df_filtered.groupby("Publisher")
+                       .agg(Total_Sales=("Global_Sales", "sum"),
+                            Total_Games=("Name", "count"),
+                            Avg_Sales=("Global_Sales", "mean"))
+                       .reset_index()
+                       .sort_values("Total_Sales", ascending=False)
+                       .head(10)
+        )
+        col5, col6 = st.columns(2)
+        with col5:
+            fig_pub = px.bar(
+                pub_sales.sort_values("Total_Sales"), x="Total_Sales", y="Publisher",
+                orientation="h", title="Top 10 Publisher — Total Penjualan",
+                color="Total_Sales", color_continuous_scale="Reds", text_auto=".0f"
+            )
+            fig_pub.update_layout(showlegend=False, margin=dict(t=40, b=10))
+            st.plotly_chart(fig_pub, width="stretch")
+        with col6:
+            fig_pub_avg = px.bar(
+                pub_sales.sort_values("Avg_Sales"), x="Avg_Sales", y="Publisher",
+                orientation="h", title="Top 10 Publisher — Rata-rata per Judul",
+                color="Avg_Sales", color_continuous_scale="YlOrRd", text_auto=".2f"
+            )
+            fig_pub_avg.update_layout(showlegend=False, margin=dict(t=40, b=10))
+            st.plotly_chart(fig_pub_avg, width="stretch")
 
-    with col_ins2:
-        st.subheader("📈 Business Recommendations")
-        st.markdown("""
-        Berdasarkan analisis tren dan data historis, berikut rekomendasi strategis:
-        
-        * **Terapkan Kebijakan Deposit Fleksibel:** Mengingat tingginya angka pembatalan pada reservasi dengan *lead time* yang lama, terapkan sistem deposit progresif untuk mengunci komitmen tamu.
-        * **Tingkatkan Kampanye Direct Booking:** Kurangi ketergantungan pada Online Travel Agents (OTA) dengan memberikan insentif (seperti diskon atau welcome drink) bagi tamu yang memesan langsung via website hotel.
-        * **Program Loyalitas untuk Repeat Guests:** Tamu yang kembali (*repeated guests*) terbukti memiliki *cancellation rate* yang rendah. Buat program member/loyalitas khusus.
-        * **Promosi Agresif di Low Season:** Analisis revenue bulanan menunjukkan adanya celah (*drop*) di beberapa bulan tertentu. Fokuskan budget marketing pada periode tersebut.
-        """)
-
-# ==========================================
-# SECTION 7 - PREDICTIVE ANALYTICS
-# ==========================================
+# ───────────────────────────────────────────────────────────────
+# TAB 5 — DISTRIBUSI REGIONAL (Sudah Terurut)
+# ───────────────────────────────────────────────────────────────
 with tab5:
-    st.subheader("🤖 Predictive Analytics: Cancellation Predictor")
-    st.markdown("Menggunakan Machine Learning (Random Forest) untuk memprediksi probabilitas pembatalan berdasarkan pola booking historis.")
-    
-    features = ['lead_time', 'adr', 'adults', 'children']
-    target = 'is_canceled'
-    
-    # Periksa ketersediaan fitur
-    if all(col in filtered_df.columns for col in features + [target]):
-        ml_data = filtered_df[features + [target]].dropna()
+    st.subheader("Distribusi Penjualan Regional")
+    st.markdown(
+        """
+        **Apa yang dianalisis:**
+        Proporsi penjualan dari empat wilayah (NA, EU, JP, Other)
+        dan perbandingan preferensi genre antar wilayah.
+        """
+    )
+    if not df_filtered.empty:
+        region_totals = pd.DataFrame({
+            "Region": ["NA", "EU", "JP", "Other"],
+            "Sales": [
+                df_filtered["NA_Sales"].sum(),
+                df_filtered["EU_Sales"].sum(),
+                df_filtered["JP_Sales"].sum(),
+                df_filtered["Other_Sales"].sum()
+            ]
+        })
+        col7, col8 = st.columns([1, 2])
+        with col7:
+            fig_pie = px.pie(
+                region_totals, values="Sales", names="Region",
+                title="Proporsi Penjualan per Wilayah",
+                hole=0.4, color_discrete_sequence=px.colors.qualitative.Set2
+            )
+            fig_pie.update_layout(margin=dict(t=40, b=10))
+            st.plotly_chart(fig_pie, width="stretch")
+            
+        with col8:
+            # 1. Hitung total penjualan per genre untuk dasar pengurutan
+            region_genre = (
+                df_filtered.groupby("Genre")[["NA_Sales", "EU_Sales", "JP_Sales", "Other_Sales"]]
+                           .sum().reset_index()
+            )
+            # 2. Tambahkan kolom Total dan urutkan dari terbesar ke terkecil
+            region_genre["Total_Global"] = region_genre[["NA_Sales", "EU_Sales", "JP_Sales", "Other_Sales"]].sum(axis=1)
+            region_genre = region_genre.sort_values("Total_Global", ascending=False)
+            
+            # 3. Lakukan melt untuk plotting Plotly
+            region_genre_melt = region_genre.melt(
+                id_vars=["Genre", "Total_Global"], 
+                value_vars=["NA_Sales", "EU_Sales", "JP_Sales", "Other_Sales"],
+                var_name="Region", value_name="Sales"
+            )
+            region_genre_melt["Region"] = region_genre_melt["Region"].str.replace("_Sales", "")
+            
+            fig_stacked = px.bar(
+                region_genre_melt, x="Genre", y="Sales", color="Region",
+                barmode="stack", title="Penjualan Genre berdasarkan Wilayah (Urut Terbesar)",
+                color_discrete_sequence=px.colors.qualitative.Set2
+            )
+            # Memastikan urutan sumbu X mengikuti urutan DataFrame yang sudah disortir
+            fig_stacked.update_layout(xaxis={'categoryorder':'total descending'}, margin=dict(t=40, b=10))
+            st.plotly_chart(fig_stacked, width="stretch")
+
+# ───────────────────────────────────────────────────────────────
+# TAB 6 — TOP 20 GAME TERLARIS
+# ───────────────────────────────────────────────────────────────
+with tab6:
+    st.subheader("Top 20 Game Terlaris")
+    if not df_filtered.empty:
+        # 1. Ambil top 20 data mentah (terurut menurun)
+        top20 = (
+            df_filtered[["Name", "Platform", "Year", "Genre", "Publisher", "Global_Sales"]]
+            .sort_values("Global_Sales", ascending=False)
+            .head(20)
+            .reset_index(drop=True)
+        )
+        top20.index += 1
         
-        if len(ml_data) > 100: # Cukup data untuk training
-            X = ml_data[features]
-            y = ml_data[target]
-            
-            # Split data
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-            
-            # Train Model
-            rf_model = RandomForestClassifier(n_estimators=50, random_state=42)
-            rf_model.fit(X_train, y_train)
-            
-            # Prediksi dan Akurasi
-            y_pred = rf_model.predict(X_test)
-            acc = accuracy_score(y_test, y_pred)
-            
-            col_m1, col_m2 = st.columns(2)
-            
-            with col_m1:
-                st.metric(label="🤖 Model Accuracy Score", value=f"{acc*100:.2f}%")
-                st.write("Model berhasil dilatih menggunakan algoritma Random Forest Classifier.")
-                
-            with col_m2:
-                # Feature Importance
-                importances = rf_model.feature_importances_
-                feat_df = pd.DataFrame({'Feature': features, 'Importance': importances}).sort_values(by='Importance', ascending=False)
-                fig_feat = px.bar(feat_df, x='Importance', y='Feature', orientation='h', title="Feature Importance")
-                st.plotly_chart(fig_feat, use_container_width=True)
-                
-        else:
-            st.warning("⚠️ Data setelah difilter terlalu sedikit untuk melatih model Machine Learning.")
-    else:
-        st.error("Kolom fitur yang dibutuhkan untuk Prediksi tidak ditemukan.")
+        # 2. Pembuatan plot
+        fig_top20 = px.bar(
+            top20, x="Global_Sales", y="Name",
+            orientation="h", color="Genre", hover_data=["Platform", "Year", "Publisher"],
+            title="Top 20 Game Terlaris (Peringkat #1 di Atas)",
+            color_discrete_sequence=px.colors.qualitative.Plotly, text_auto=".1f"
+        )
+        
+        # 3. Kunci urutan sumbu Y agar mengabaikan pengelompokan warna (Genre)
+        # 'total ascending' memastikan nilai terbesar berada paling atas di grafik horizontal
+        fig_top20.update_layout(
+            showlegend=True, 
+            yaxis_title="", 
+            margin=dict(t=50, b=10),
+            yaxis={'categoryorder': 'total ascending'} 
+        )
+        
+        st.plotly_chart(fig_top20, width="stretch")
+        
+        with st.expander("📋 Lihat Tabel Top 20"):
+            st.dataframe(top20)
+
+# ───────────────────────────────────────────────────────────────
+# TAB 7 — INSIGHT BISNIS
+# ───────────────────────────────────────────────────────────────
+with tab7:
+    st.subheader("Ringkasan Insight Bisnis")
+    st.info(
+        """
+        **1. Dominasi Pasar Amerika Utara (49%)**\n
+        NA adalah pasar tunggal paling menguntungkan. Publisher yang ingin
+        sukses global harus mengutamakan pelokalan dan pemasaran di NA.\n\n
+        **2. Pasar Jepang Berbeda**\n
+        Jepang memiliki preferensi kuat pada RPG dan kurang tertarik pada
+        Shooter — berlawanan dengan NA/EU. Strategi dual-market diperlukan.\n\n
+        **3. Genre Action adalah Raja — Tapi Bukan yang Paling Efisien**\n
+        Action memimpin total penjualan tapi karena volume judul banyak.
+        Platform dan Sports memiliki rata-rata per judul yang lebih tinggi.\n\n
+        **4. PS2 adalah Platform Terbesar Sepanjang Sejarah**\n
+        Dengan library terbesar dan harga terjangkau, PS2 melampaui semua
+        platform lain.\n\n
+        **5. Puncak Industri 2006–2009 (Era Motion Control)**\n
+        Peluncuran Wii oleh Nintendo menciptakan gelombang baru pengguna kasual.\n\n
+        **6. Nintendo = Publisher Paling Efisien**\n
+        Nintendo menghasilkan penjualan tertinggi dengan strategi first-party
+        quality-over-quantity.
+        """
+    )
+
+# ───────────────────────────────────────────────────────────────
+# TAB 8 — DOKUMENTASI
+# ───────────────────────────────────────────────────────────────
+with tab8:
+    st.subheader("Dokumentasi Variabel & Fungsi")
+    
+    with st.expander("📌 Variabel Dataset (Kolom vgsales.csv)", expanded=False):
+        var_doc = pd.DataFrame({
+            "Variabel":    ["Rank", "Name", "Platform", "Year", "Genre",
+                            "Publisher", "NA_Sales", "EU_Sales", "JP_Sales",
+                            "Other_Sales", "Global_Sales"],
+            "Tipe":        ["int", "str", "str", "int", "str",
+                            "str", "float", "float", "float", "float", "float"],
+            "Deskripsi":   [
+                "Peringkat berdasarkan Global_Sales", "Judul game",
+                "Platform / konsol", "Tahun rilis", "Genre permainan",
+                "Penerbit / developer", "Penjualan di NA", "Penjualan di EU",
+                "Penjualan di JP", "Penjualan di wilayah lain", "Total penjualan global"
+            ]
+        })
+        st.dataframe(var_doc, width="stretch", hide_index=True)
+
+    with st.expander("⚙️ Variabel Turunan (dibuat di kode)", expanded=False):
+        derived_doc = pd.DataFrame({
+            "Variabel":      ["df", "df_filtered", "year_sales", "genre_sales",
+                              "platform_sales", "pub_sales", "region_totals",
+                              "region_genre", "region_genre_melt", "top20"],
+            "Deskripsi": [
+                "DataFrame lengkap setelah cleaning",
+                "Subset df setelah filter diterapkan",
+                "Aggregasi penjualan per tahun",
+                "Aggregasi genre: sales, games, avg",
+                "Top 15 platform by sales",
+                "Top 10 publisher by sales",
+                "Total penjualan 4 wilayah",
+                "Penjualan genre × wilayah (wide)",
+                "Penjualan genre × wilayah (long)",
+                "Top 20 game terlaris"
+            ]
+        })
+        st.dataframe(derived_doc, width="stretch", hide_index=True)
+
+    with st.expander("🔧 Fungsi dalam Kode", expanded=False):
+        func_doc = pd.DataFrame({
+            "Fungsi":       ["load_data()", "apply_filters()", "make_bar()"],
+            "Return":       ["pd.DataFrame", "pd.DataFrame", "plotly.Figure"],
+            "Deskripsi": [
+                "Membaca & membersihkan data (di-cache).",
+                "Menerapkan filter pada DataFrame.",
+                "Helper membuat bar chart dengan Plotly."
+            ]
+        })
+        st.dataframe(func_doc, width="stretch", hide_index=True)
+
+
+#  FOOTER
+st.divider()
+st.caption(
+    "📊 Dashboard dibuat dengan Streamlit + Plotly · "
+    "Data: VGChartz via Kaggle · "
+    "Analisis mencakup penjualan fisik; penjualan digital tidak termasuk."
+)

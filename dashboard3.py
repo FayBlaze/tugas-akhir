@@ -63,9 +63,7 @@ def load():
 
     return df
 
-# ──────────────────────────────────────────────────────────────────────────────
 # 4. LOAD DATA
-# ──────────────────────────────────────────────────────────────────────────────
 df_raw = load()
 
 
@@ -93,13 +91,10 @@ with st.sidebar:
     st.write(f"**{df['country'].nunique()}** negara asal")
     st.write(f"**{df['arrival_date_year'].nunique()}** tahun data")
 
-# ──────────────────────────────────────────────────────────────────────────────
 # 6. HEADER
-# ──────────────────────────────────────────────────────────────────────────────
 st.title("HOTEL BOOKING ANALYTICS")
 st.caption("📊 Business Intelligence · HotelIQ Platform")
 
-# ──────────────────────────────────────────────────────────────────────────────
 # 7. KPI ROW
 st.subheader("KEY PERFORMANCE INDICATORS")
 
@@ -122,9 +117,7 @@ cols[5].metric("Rata-rata Lead Time", f"{avg_lead:.0f} hari")
 
 st.divider()
 
-# ──────────────────────────────────────────────────────────────────────────────
 # 8. TABS
-# ──────────────────────────────────────────────────────────────────────────────
 t1, t2, t3, t4, t5 = st.tabs([
     "📈 TREN BOOKING",
     "💰 REVENUE & HARGA",
@@ -133,9 +126,7 @@ t1, t2, t3, t4, t5 = st.tabs([
     "❌ ANALISIS PEMBATALAN",
 ])
 
-# ══════════════════════════════════════════════════════════════════════════════
 # TAB 1 — TREN BOOKING
-# ══════════════════════════════════════════════════════════════════════════════
 with t1:
     st.subheader("Volume Booking Bulanan")
 
@@ -154,6 +145,8 @@ with t1:
             title="Jumlah Booking per Bulan & Tahun",
             markers=True,
         )
+
+        fig.update_xaxes(categoryorder="array", categoryarray=MONTH_ORDER)
         st.plotly_chart(fig, use_container_width=True)
 
     with right:
@@ -217,6 +210,7 @@ with t2:
             title="Rata-rata ADR per Bulan & Tahun (Booking Terkonfirmasi)",
             markers=True,
         )
+        fig.update_xaxes(categoryorder="array", categoryarray=MONTH_ORDER)
         st.plotly_chart(fig, use_container_width=True)
 
     with c2:
