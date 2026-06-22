@@ -34,7 +34,7 @@ if df.empty:
     st.stop()
 
 #  JUDUL DASHBOARD
-st.title("🎮 Video Game Sales — Business Intelligence Dashboard")
+st.title("Video Game Sales")
 st.caption(
     "Analisis penjualan video game global · Data: VGChartz via Kaggle · "
     f"{len(df):,} judul · {df['Year'].min()}–{df['Year'].max()}"
@@ -83,7 +83,7 @@ with st.sidebar:
     )
 
     st.divider()
-    st.caption("ℹ️ Filter berlaku pada semua grafik di bawah.")
+    st.caption("ℹ️ Filter berlaku pada semua grafik pada dashboard.")
 
 
 #  FUNGSI: apply_filters()
@@ -135,10 +135,7 @@ def make_bar(data: pd.DataFrame, x: str, y: str, title: str, color: str = None, 
     fig.update_layout(showlegend=False, margin=dict(t=40, b=10))
     return fig
 
-
-# ═══════════════════════════════════════════════════════════════
 #  PEMBUATAN TABS
-# ═══════════════════════════════════════════════════════════════
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "📈 Tren", 
     "🕹️ Genre", 
@@ -150,23 +147,10 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "📖 Docs"
 ])
 
-# ───────────────────────────────────────────────────────────────
+
 # TAB 1 — TREN PENJUALAN PER TAHUN
-# ───────────────────────────────────────────────────────────────
 with tab1:
     st.subheader("Tren Penjualan per Tahun")
-    st.markdown(
-        """
-        **Apa yang dianalisis:**
-        Total penjualan global (juta unit) dijumlahkan per tahun untuk
-        mengidentifikasi fase pertumbuhan, puncak, dan penurunan industri.
-
-        **Temuan utama:**
-        Industri mencapai puncaknya pada **2006–2009** (era Wii, DS, PS3, X360).
-        Tren menurun setelah 2009 mencerminkan fragmentasi pasar ke mobile/digital
-        yang tidak tercakup dataset ini (VGChartz hanya rekam penjualan fisik).
-        """
-    )
     if not df_filtered.empty:
         year_sales = (
             df_filtered.groupby("Year")["Global_Sales"]
@@ -183,9 +167,7 @@ with tab1:
         fig_trend.update_layout(xaxis_title="Tahun", yaxis_title="Penjualan (juta unit)", margin=dict(t=40, b=10))
         st.plotly_chart(fig_trend, width="stretch")
 
-# ───────────────────────────────────────────────────────────────
 # TAB 2 — ANALISIS GENRE
-# ───────────────────────────────────────────────────────────────
 with tab2:
     st.subheader("Analisis Genre")
     st.markdown(
@@ -263,9 +245,7 @@ with tab3:
             fig_plat_games.update_layout(showlegend=False, margin=dict(t=40, b=10))
             st.plotly_chart(fig_plat_games, width="stretch")
 
-# ───────────────────────────────────────────────────────────────
 # TAB 4 — ANALISIS PUBLISHER
-# ───────────────────────────────────────────────────────────────
 with tab4:
     st.subheader("Analisis Publisher")
     st.markdown(
@@ -303,9 +283,7 @@ with tab4:
             fig_pub_avg.update_layout(showlegend=False, margin=dict(t=40, b=10))
             st.plotly_chart(fig_pub_avg, width="stretch")
 
-# ───────────────────────────────────────────────────────────────
 # TAB 5 — DISTRIBUSI REGIONAL (Sudah Terurut)
-# ───────────────────────────────────────────────────────────────
 with tab5:
     st.subheader("Distribusi Penjualan Regional")
     st.markdown(
@@ -362,9 +340,7 @@ with tab5:
             fig_stacked.update_layout(xaxis={'categoryorder':'total descending'}, margin=dict(t=40, b=10))
             st.plotly_chart(fig_stacked, width="stretch")
 
-# ───────────────────────────────────────────────────────────────
 # TAB 6 — TOP 20 GAME TERLARIS
-# ───────────────────────────────────────────────────────────────
 with tab6:
     st.subheader("Top 20 Game Terlaris")
     if not df_filtered.empty:
