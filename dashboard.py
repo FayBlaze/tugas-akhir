@@ -136,14 +136,13 @@ def make_bar(data: pd.DataFrame, x: str, y: str, title: str, color: str = None, 
     return fig
 
 #  PEMBUATAN TABS
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "📈 Tren", 
     "🕹️ Genre", 
     "🖥️ Platform", 
     "🏢 Publisher", 
     "🌏 Regional", 
-    "🏆 Top 20", 
-    "💡 Insight", 
+    "🏆 Top 20",
     "📖 Docs"
 ])
 
@@ -375,37 +374,8 @@ with tab6:
         with st.expander("📋 Lihat Tabel Top 20"):
             st.dataframe(top20)
 
-# ───────────────────────────────────────────────────────────────
-# TAB 7 — INSIGHT BISNIS
-# ───────────────────────────────────────────────────────────────
+# TAB 7— DOKUMENTASI
 with tab7:
-    st.subheader("Ringkasan Insight Bisnis")
-    st.info(
-        """
-        **1. Dominasi Pasar Amerika Utara (49%)**\n
-        NA adalah pasar tunggal paling menguntungkan. Publisher yang ingin
-        sukses global harus mengutamakan pelokalan dan pemasaran di NA.\n\n
-        **2. Pasar Jepang Berbeda**\n
-        Jepang memiliki preferensi kuat pada RPG dan kurang tertarik pada
-        Shooter — berlawanan dengan NA/EU. Strategi dual-market diperlukan.\n\n
-        **3. Genre Action adalah Raja — Tapi Bukan yang Paling Efisien**\n
-        Action memimpin total penjualan tapi karena volume judul banyak.
-        Platform dan Sports memiliki rata-rata per judul yang lebih tinggi.\n\n
-        **4. PS2 adalah Platform Terbesar Sepanjang Sejarah**\n
-        Dengan library terbesar dan harga terjangkau, PS2 melampaui semua
-        platform lain.\n\n
-        **5. Puncak Industri 2006–2009 (Era Motion Control)**\n
-        Peluncuran Wii oleh Nintendo menciptakan gelombang baru pengguna kasual.\n\n
-        **6. Nintendo = Publisher Paling Efisien**\n
-        Nintendo menghasilkan penjualan tertinggi dengan strategi first-party
-        quality-over-quantity.
-        """
-    )
-
-# ───────────────────────────────────────────────────────────────
-# TAB 8 — DOKUMENTASI
-# ───────────────────────────────────────────────────────────────
-with tab8:
     st.subheader("Dokumentasi Variabel & Fungsi")
     
     with st.expander("📌 Variabel Dataset (Kolom vgsales.csv)", expanded=False):
